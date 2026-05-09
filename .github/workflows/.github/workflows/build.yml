@@ -1,0 +1,31 @@
+name: Build Native Dylib
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Compile via Apple Clang
+        run: |
+          find . -type f -name "*.x" | while read f; do mv "$f" "${f%.x}.m"; done
+          SRC_FILES=$(find . -type f -name "*.m")
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          
+          # 🔥 关键修复 1：加入了 -miphoneos-version-min=14.0 声明兼容性
+          clang -dynamiclib -arch arm64 -miphoneos-version-min=14.0 -isysroot $SDK_PATH -fobjc-arc -framework Foundation -framework UIKit -install_name @rpath/STS2_Mod_Loader.dylib $SRC_FILES -o STS2_Mod_Loader.dylib
+          
+          # 🔥 关键修复 2：为编译出来的 dylib 加上本地伪签名，防止 iOS 沙盒拦截
+          codesign -f -s - STS2_Mod_Loader.dylib
+          
+      - name: Upload Dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: STS2_Mod_Loader_Dylib
+          path: STS2_Mod_Loader.dylib
